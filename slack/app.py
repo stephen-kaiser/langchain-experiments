@@ -1,11 +1,14 @@
 import os
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from slack_bolt.adapter.flask import SlackRequestHandler
 from slack_bolt import App
 from dotenv import find_dotenv, load_dotenv
-from flask import Flask, request
-from functions import draft_email
+from flask import Flask, request, jsonify
+from functions import share_sql_query
 
 # Load environment variables from .env file
 load_dotenv(find_dotenv())
@@ -13,6 +16,7 @@ load_dotenv(find_dotenv())
 # Set Slack API credentials
 SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 SLACK_SIGNING_SECRET = os.environ["SLACK_SIGNING_SECRET"]
+print(SLACK_SIGNING_SECRET)
 SLACK_BOT_USER_ID = os.environ["SLACK_BOT_USER_ID"]
 
 # Initialize the Slack app
@@ -39,21 +43,6 @@ def get_bot_user_id():
         print(f"Error: {e}")
 
 
-def my_function(text):
-    """
-    Custom function to process the text and return a response.
-    In this example, the function converts the input text to uppercase.
-
-    Args:
-        text (str): The input text to process.
-
-    Returns:
-        str: The processed text.
-    """
-    response = text.upper()
-    return response
-
-
 @app.event("app_mention")
 def handle_mentions(body, say):
     """
@@ -68,14 +57,12 @@ def handle_mentions(body, say):
 
     mention = f"<@{SLACK_BOT_USER_ID}>"
     text = text.replace(mention, "").strip()
-
     say("Sure, I'll get right on that!")
-    # response = my_function(text)
-    response = draft_email(text)
+    response = share_sql_query(text)
     say(response)
 
 
-@flask_app.route("/slack/events", methods=["POST"])
+@flask_app.route('/slack/events', methods=['POST'])
 def slack_events():
     """
     Route for handling Slack events.
@@ -84,9 +71,13 @@ def slack_events():
     Returns:
         Response: The result of handling the request.
     """
-    return handler.handle(request)
+    data = request.json
+    # Check if the request is a challenge request
+    if 'challenge' in data:
+        return jsonify({"challenge": data["challenge"]})
+    else:
+        return handler.handle(request)
 
 
-# Run the Flask app
-if __name__ == "__main__":
-    flask_app.run()
+if __name__ == '__main__': 
+    flask_app.run(host='0.0.0.0', port=3000,debug=True)
